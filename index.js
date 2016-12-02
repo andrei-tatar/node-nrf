@@ -560,7 +560,6 @@ exports.connect = function (spi,ce,irq) {
             var sendOpts = _extend({},this._sendOpts);
             //if (rxPipes.length) sendOpts.ceHigh = true;        // PRX will already have CE high
             nrf.sendPayload(data, sendOpts, function (e) {
-                if (e) return cb(e);
                 var s = {};                 // NOTE: if another TX is waiting, switching to RX is a waste…
                 if (rxPipes.length && !this._sendOpts.asAckTo) {
                     nrf.setCE('high');
@@ -570,7 +569,9 @@ exports.connect = function (spi,ce,irq) {
                     s['RX_ADDR_P0'] = rxP0._addr;
                     rxP0._pipe = 0;
                 }
-                nrf.setStates(s, cb);
+                nrf.setStates(s, function (statesError) {
+                    cb(e||statesError);
+                });
             }.bind(this));
             if (!rxPipes.length) nrf._prevSender = this;    // we might avoid setting state next time
         }.bind(this));
