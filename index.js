@@ -337,7 +337,7 @@ exports.connect = function (spi,ce,irq) {
             if (e) return cb(e);
             if (!opts.ceHigh) nrf.pulseCE('pece2csn');
             // TODO: if _sendOpts.asAckTo we won't get MAX_RT interrupt — how to prevent a blocked TX FIFO? (see p.33)
-            nrf.once('interrupt', function (d) {
+            var handler = function (d) {
                 if (d.MAX_RT) nrf.execCommand('FLUSH_TX', function (e) {    // see p.56
                     finish(new Error("Packet timeout, transmit queue flushed."));
                 });
@@ -345,11 +345,13 @@ exports.connect = function (spi,ce,irq) {
                 else finish();
                 
                 function finish(e) {        // clear our interrupts, leaving RX_DR
+                    nrf.removeListener('interrupt', handler);
                     nrf.setStates({TX_DS:true,MAX_RT:true,RX_DR:false}, function () {
                         cb(e||null);
                     });
                 }
-            });
+            };
+            nrf.on('interrupt', handler);
         });  
     };
     
@@ -394,7 +396,7 @@ exports.connect = function (spi,ce,irq) {
             irq.addListener('fall', irqListener);
         } else {
             console.warn("Recommend use with IRQ pin, fallback handling is suboptimal.");
-            irqListener = setInterval(function () {       // TODO: clear interval when there are no listeners?
+            setInterval(function () {
                 if (nrf.listeners('interrupt').length) nrf._checkStatus(false);
             }, 0);  // (minimum 4ms is a looong time if hoping to quickly stream data!)
         }
@@ -403,7 +405,6 @@ exports.connect = function (spi,ce,irq) {
     nrf._irqOff = function () {
         if (!irqOn) return;
         else if (irq) irq.removeListener('fall', irqListener);
-        else clearInterval(irqListener);
         irqOn = false;
     };
     
